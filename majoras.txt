@@ -1,0 +1,973 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+
+using OpenTK;
+using OpenTK.Graphics;
+using OpenTK.Graphics.OpenGL;
+using OpenTK.Input;
+using System.Drawing;
+using System.Drawing.Imaging;
+
+namespace StarterKit
+{
+    class Program : GameWindow
+    {
+        bool fill = true;
+        Matrix4 modelview;
+        int textures, heart_list;
+        Bitmap bitmap = new Bitmap("C:\\Users\\Nick\\Documents\\Graphics\\majora_mask.bmp");
+
+        //declare buffers
+        uint top_buffer, bot_buffer, border_buffer, eye_buffer;
+        uint yellow_buffer, red_buffer, blue_buffer, green_buffer;
+
+        //declare arrays that our buffers will get their data from
+        Vector4d[] top_heart_array, bot_heart_array, border_array, eye_array;
+        Vector4d[] yellow_array, blue_array, green_array, red_array;
+
+        /// <summary>
+        /// Creates a 800x600 window with the specified title.
+        /// </summary>
+        public Program()
+            : base(800, 600, GraphicsMode.Default, "Majoras Mask")
+        {
+            VSync = VSyncMode.On;
+        }
+
+        /// <summary>Load resources here.</summary>
+        /// from disk, like images or music
+        /// <param name="e">Not used.</param>
+        protected override void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
+
+            GL.ClearColor(0.1f, 0.2f, 0.5f, 0.0f);
+            GL.Enable(EnableCap.DepthTest);
+
+            fill_cone_arrays();
+            fill_heart_array();
+            fill_border_array();
+            fill_eye_array();
+
+            //Generates yellow_buffer
+            GL.GenBuffers(1, out yellow_buffer);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, yellow_buffer);
+            GL.BufferData(BufferTarget.ArrayBuffer, new IntPtr(yellow_array.Length * sizeof(double) * 4), yellow_array, BufferUsageHint.DynamicDraw);
+
+            //Generates red_buffer
+            GL.GenBuffers(1, out red_buffer);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, red_buffer);
+            GL.BufferData(BufferTarget.ArrayBuffer, new IntPtr(red_array.Length * sizeof(double) * 4), red_array, BufferUsageHint.DynamicDraw);
+
+            //Generates blue_buffer
+            GL.GenBuffers(1, out blue_buffer);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, blue_buffer);
+            GL.BufferData(BufferTarget.ArrayBuffer, new IntPtr(blue_array.Length * sizeof(double) * 4), blue_array, BufferUsageHint.DynamicDraw);
+
+            //Generates green_buffer
+            GL.GenBuffers(1, out green_buffer);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, green_buffer);
+            GL.BufferData(BufferTarget.ArrayBuffer, new IntPtr(green_array.Length * sizeof(double) * 4), green_array, BufferUsageHint.DynamicDraw);
+
+            //Generates top_buffer
+            GL.GenBuffers(1, out top_buffer);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, top_buffer);
+            GL.BufferData(BufferTarget.ArrayBuffer, new IntPtr(top_heart_array.Length * sizeof(double) * 4), top_heart_array, BufferUsageHint.StaticDraw);
+
+            //Generates bot_buffer
+            GL.GenBuffers(1, out bot_buffer);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, bot_buffer);
+            GL.BufferData(BufferTarget.ArrayBuffer, new IntPtr(bot_heart_array.Length * sizeof(double) * 4), bot_heart_array, BufferUsageHint.StaticDraw);
+
+            //Generates border_buffer
+            GL.GenBuffers(1, out border_buffer);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, border_buffer);
+            GL.BufferData(BufferTarget.ArrayBuffer, new IntPtr(border_array.Length * sizeof(double) * 4), border_array, BufferUsageHint.StaticDraw);
+
+            //Generates eye_buffer
+            GL.GenBuffers(1, out eye_buffer);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, eye_buffer);
+            GL.BufferData(BufferTarget.ArrayBuffer, new IntPtr(eye_array.Length * sizeof(double) * 4), eye_array, BufferUsageHint.StaticDraw);
+
+            modelview = Matrix4.LookAt(20.0f, -20.0f, 45.0f, 0.0f, 0.0f, 0.0f, 0.0f, 2.0f, 0.0f);
+            GL.LoadMatrix(ref modelview);
+
+            GL.MatrixMode(MatrixMode.Modelview);
+
+            GL.Enable(EnableCap.DepthTest);
+            GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+            LoadTextures();
+        }
+
+        protected void LoadTextures()
+        {
+            GL.GenTextures(1, out textures);
+            LoadTexture();
+        }
+
+        protected void LoadTexture()
+        {
+            GL.BindTexture(TextureTarget.Texture2D, textures);
+
+            BitmapData data = bitmap.LockBits(new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height),
+                ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+
+            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, data.Width, data.Height, 0,
+                OpenTK.Graphics.OpenGL.PixelFormat.Bgra, PixelType.UnsignedByte, data.Scan0);
+
+            bitmap.UnlockBits(data);
+
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
+
+            //free the bitmap data (we dont need it anymore because it has been passed to the OpenGL driver
+
+        }
+
+        /// <summary>
+        /// using the parametric equation
+        /// x = r * cos(t)
+        /// y = r * sin(t)
+        /// </summary>
+        protected void fill_cone_arrays()
+        {
+            //x and y cords for the base of the cone
+            double x, y;
+
+            //colors for the base of the cones
+            Vector4d my_y_color = new Vector4d(0.10d, 0.10d, .20d, 1);
+            Vector4d my_r_color = new Vector4d(0.0d, 0.0d, .20d, 1);
+            Vector4d my_g_color = new Vector4d(0.0d, 0.0d, .20d, 1);
+            Vector4d my_b_color = new Vector4d(0.0d, 0.0d, .20d, 1);
+
+            //temp lists the we will add points to, will convert back to the arrays later
+            //this allows me to never specify the size of the array up front - big win
+            List<Vector4d> y_list = new List<Vector4d>();
+            List<Vector4d> r_list = new List<Vector4d>();
+            List<Vector4d> g_list = new List<Vector4d>();
+            List<Vector4d> b_list = new List<Vector4d>();
+
+            //yellow peak
+            y_list.Add(new Vector4d(0.0d, 0.0d, 8.0d, 1));
+            y_list.Add(new Vector4d(1d, 1d, 0.0d, 1));
+
+            //red peak
+            r_list.Add(new Vector4d(0.0d, 0.0d, 8.0d, 1));
+            r_list.Add(new Vector4d(1d, 0.0d, 0.0d, 1));
+
+            //green peak
+            g_list.Add(new Vector4d(0.0f, 0.0f, 8.0f, 1));
+            g_list.Add(new Vector4d(0.0d, 1d, 0.0d, 1));
+
+            //blue peak
+            b_list.Add(new Vector4d(0.0f, 0.0f, 8.0f, 1));
+            b_list.Add(new Vector4d(0.0d, 0.0d, 1.0d, 1));
+
+            //t = 2 * Math.PI; t >= 0; t -= .01
+            for (double t = 2 * Math.PI; t >= -1.0; t -= .9)
+            {
+                //using the parametric in the summary section
+                x = 1.5 * Math.Cos(t);
+                y = 1.5 * Math.Sin(t);
+
+                //add the point to each list. This is redundant and i hate it, must find a fix.
+                y_list.Add(new Vector4d(x, y, 0.0d, 1));
+                r_list.Add(new Vector4d(x, y, 0.0d, 1));
+                g_list.Add(new Vector4d(x, y, 0.0d, 1));
+                b_list.Add(new Vector4d(x, y, 0.0d, 1));
+
+                //add the color to each list
+                y_list.Add(my_y_color);
+                r_list.Add(my_r_color);
+                g_list.Add(my_g_color);
+                b_list.Add(my_b_color);
+            }
+
+            //convert the lists back to the arrays
+            yellow_array = y_list.ToArray();
+            blue_array = b_list.ToArray();
+            red_array = r_list.ToArray();
+            green_array = g_list.ToArray();
+        }
+
+        [Obsolete("Please use tech mapping instead.")]
+        protected void fill_eye_array()
+        {
+            double x, y;
+            List<Vector4d> eye_list = new List<Vector4d>();
+            eye_list.Add(new Vector4d(0.0f, 0.0f, 0.0f, 1));
+            for (double t = 2 * Math.PI; t >= 0; t -= .01)
+            {
+                x = 1 * Math.Cos(t);
+                y = 1 * Math.Sin(t);
+                eye_list.Add(new Vector4d((float)x, (float)y, 0.0f, 1));
+            }
+            eye_array = eye_list.ToArray();
+
+        }
+
+        /// <summary>
+        /// Using the parametric equation 
+        /// x = 16sin^3(t)
+        /// y = 13cos(t) - 5cos(2t) - 2cos(3t) - cos(4t)
+        /// t = 0...6.24
+        /// </summary>
+        //protected void fill_heart_array()
+        //{
+        //    double x, y, x_2, y_2;
+        //    List<Vector4d> top_list = new List<Vector4d>();
+        //    List<Vector4d> bot_list = new List<Vector4d>();
+
+        //    for (double t = 6.2; t >= 0; t -= .01)
+        //    {
+        //        //point along the edge of the heart
+        //        x = 16 * Math.Pow(Math.Sin(t), 3);
+        //        y = (13 * Math.Cos(t)) - (5 * Math.Cos(2 * t)) - (2 * Math.Cos(3 * t)) - Math.Cos(4 * t);
+
+        //        //Calculating the texture cordinate for the bitmap
+        //        x_2 = (Math.Pow(Math.Sin(t), 3)) / 2 + .5;
+        //        y_2 = ((13 * Math.Cos(t)) - (5 * Math.Cos(2 * t)) - (2 * Math.Cos(3 * t)) - Math.Cos(4 * t)) / 32 + .54;
+
+        //        //texture cord
+        //        top_list.Add(new Vector4d(-x_2, -y_2, 0, 1));
+
+        //        //top heart cord
+        //        top_list.Add(new Vector4d(x, y, 0, 1));
+
+        //        //bot heart cord (-3 for the offset on the z)
+        //        bot_list.Add(new Vector4d(x, y, -3, 1));
+        //    }
+
+        //    top_heart_array = top_list.ToArray();
+        //    bot_heart_array = bot_list.ToArray();
+        //}
+
+        protected void fill_heart_array()
+        {
+            double x, y, x2, y2;
+            List<Vector4d> top_list = new List<Vector4d>();
+            List<Vector4d> bot_list = new List<Vector4d>();
+
+            top_list.Add(new Vector4d(0.0f, 0.0f, 0.0f, 1));
+            bot_list.Add(new Vector4d(0.0f, 0.0f, 0.0f, 1));
+
+            for (double t = 6.2; t >= 0; t -= .01)
+            {
+                x = 16 * Math.Pow(Math.Sin(t), 3);
+                y = (13 * Math.Cos(t)) - (5 * Math.Cos(2 * t)) - (2 * Math.Cos(3 * t)) - Math.Cos(4 * t);
+                x2 = (Math.Pow(Math.Sin(t), 3)) / 2 + .5;
+                y2 = ((13 * Math.Cos(t)) - (5 * Math.Cos(2 * t)) - (2 * Math.Cos(3 * t)) - Math.Cos(4 * t)) / 32 + .54;
+
+                top_list.Add(new Vector4d(x, y, 0, 1));
+                bot_list.Add(new Vector4d(x, y, -3, 1));
+            }
+
+            top_heart_array = top_list.ToArray();
+            bot_heart_array = bot_list.ToArray();
+        }
+
+        protected void create_top_heart()
+        {
+            heart_list = GL.GenLists(1);
+
+            GL.NewList(heart_list, ListMode.Compile);
+            GL.Begin(BeginMode.Polygon);
+            GL.Color3(1.0, 1.0, 1.0);
+            double x, y, x2, y2;
+            for (double t = 6.2; t >= 0; t -= .01)
+            {
+                x = 16 * Math.Pow(Math.Sin(t), 3);
+                y = (13 * Math.Cos(t)) - (5 * Math.Cos(2 * t)) - (2 * Math.Cos(3 * t)) - Math.Cos(4 * t);
+                x2 = (Math.Pow(Math.Sin(t), 3)) / 2 + .5;
+                y2 = ((13 * Math.Cos(t)) - (5 * Math.Cos(2 * t)) - (2 * Math.Cos(3 * t)) - Math.Cos(4 * t)) / 29 + .54;
+                GL.TexCoord2(-x2, -y2);
+                GL.Vertex2(x, y);
+            }
+            GL.End();
+            GL.EndList();
+        }
+
+        /// <summary>
+        /// Using the parametric equation
+        /// x = r cos(t)    
+        /// y = r sin(t) 
+        /// </summary>
+        protected void fill_border_array()
+        {
+            //our cords
+            double x, y, z;
+
+            //temp list, will convert back to the array later
+            List<Vector4d> curve_list = new List<Vector4d>();
+
+            for (int i = 0; i < bot_heart_array.Length - 1; i++)
+            {
+                //point along the edge of the bottom heart
+                x = bot_heart_array[i].X;
+                y = bot_heart_array[i].Y;
+                z = bot_heart_array[i].Z;
+
+                //the x and y are the same for the top and bottom, the Z however is 0 for the top heart
+                curve_list.Add(new Vector4d(x, y, 0, 1));
+                curve_list.Add(new Vector4d(x, y, z, 1));
+            }
+            //convert the list back
+            border_array = curve_list.ToArray();
+        }
+
+        /// <summary>
+        /// Called when your window is resized. Set your viewport here. It is also
+        /// a good place to set up your projection matrix (which probably changes
+        /// along when the aspect ratio of your window).
+        /// </summary>
+        /// <param name="e">Not used.</param>
+        //protected override void OnResize(EventArgs e)
+        //{
+        //    base.OnResize(e);
+
+        //    GL.Viewport(ClientRectangle.X, ClientRectangle.Y, ClientRectangle.Width, ClientRectangle.Height);
+
+        //    Matrix4 projection = Matrix4.CreatePerspectiveFieldOfView((float)Math.PI / 4, Width / (float)Height, 1.0f, 64.0f);
+        //    GL.MatrixMode(MatrixMode.Projection);
+        //    GL.LoadMatrix(ref projection);
+
+        //    //load the model view
+        //}
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+
+            GL.Viewport(ClientRectangle.X, ClientRectangle.Y, ClientRectangle.Width, ClientRectangle.Height);
+
+            Matrix4 projection = Matrix4.CreatePerspectiveFieldOfView((float)Math.PI / 4, Width / (float)Height, 1.0f, 64.0f);
+            GL.MatrixMode(MatrixMode.Projection);
+            GL.LoadMatrix(ref projection);
+            GL.MatrixMode(MatrixMode.Modelview);
+            modelview = Matrix4.LookAt(-40.0f, 20.0f, 30.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+            GL.LoadMatrix(ref modelview);
+        }
+
+
+        /// <summary>
+        /// Called when it is time to setup the next frame. Add your game logic here.
+        /// also a suitable place ot handle input, update object positions, run physics or AI calculations
+        /// </summary>
+        /// <param name="e">Contains timing information for framerate independent logic.</param>
+        protected override void OnUpdateFrame(FrameEventArgs e)
+        {
+            base.OnUpdateFrame(e);
+
+            if (Keyboard[Key.Escape])
+                Exit();
+
+            if (Keyboard[Key.J])
+            {
+                fill = true;
+            }
+            if (Keyboard[Key.K])
+            {
+                fill = false;
+            }
+            if (Keyboard[Key.Left])
+            {
+                GL.MatrixMode(MatrixMode.Modelview);
+                modelview = Matrix4.LookAt(-40.0f, 20.0f, 30.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+                GL.LoadMatrix(ref modelview);
+            }
+            if (Keyboard[Key.Right])
+            {
+                GL.MatrixMode(MatrixMode.Modelview);
+                modelview = Matrix4.LookAt(40.0f, 20.0f, 30.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+                GL.LoadMatrix(ref modelview);
+            }
+
+            if (Keyboard[Key.Down])
+            {
+                GL.MatrixMode(MatrixMode.Modelview);
+                modelview = Matrix4.LookAt(0.0f, -20.0f, 50.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+                GL.LoadMatrix(ref modelview);
+
+            }
+
+            if (Keyboard[Key.Up])
+            {
+                GL.MatrixMode(MatrixMode.Modelview);
+                modelview = Matrix4.LookAt(20.0f, 30.0f, 30.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+                GL.LoadMatrix(ref modelview);
+            }
+
+            if (Keyboard[Key.F10])
+            {
+                GL.MatrixMode(MatrixMode.Modelview);
+                modelview = Matrix4.LookAt(0.0f, -20.0f, -30.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+                GL.LoadMatrix(ref modelview);
+            }
+        }
+
+        [Obsolete("Please use tech mapping instead")]
+        protected void render_eyes()
+        {
+            //black eye border
+            GL.PushMatrix();
+            GL.Color3(0.01, 0.01, 0.01);
+
+            GL.Translate(-7, 3, 0.09);
+            GL.Scale(4.2, 4.2, 0.0);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, eye_buffer);
+            GL.VertexPointer(4, VertexPointerType.Double, 0, 0);
+            GL.DrawArrays(BeginMode.TriangleFan, 0, eye_array.Length);
+
+            GL.PopMatrix();
+
+
+            //orange outer eye
+            GL.PushMatrix();
+            GL.Color3(1.1, .35, 0.1);
+
+            GL.Translate(-7, 3, 0.1);
+            GL.Scale(4.0, 4.0, 0.0);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, eye_buffer);
+            GL.VertexPointer(4, VertexPointerType.Double, 0, 0);
+            GL.DrawArrays(BeginMode.TriangleFan, 0, eye_array.Length);
+
+            GL.PopMatrix();
+
+
+            //yellow behind green
+            GL.PushMatrix();
+            GL.Color3(1.0, 1.0, 0);
+
+            GL.Translate(-7.3, 3.2, 0.11);
+            GL.Rotate(-35.0, Vector3d.UnitZ);
+            GL.Scale(2.4, 1.9, 0.0);
+
+
+            GL.BindBuffer(BufferTarget.ArrayBuffer, eye_buffer);
+            GL.VertexPointer(4, VertexPointerType.Double, 0, 0);
+            GL.DrawArrays(BeginMode.TriangleFan, 0, eye_array.Length);
+
+            GL.PopMatrix();
+
+            //black behind green
+            GL.PushMatrix();
+            GL.Color3(0.01, 0.01, 0.01);
+
+            GL.Translate(-7, 3, 0.12);
+            GL.Scale(1.1, 1.1, 0.0);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, eye_buffer);
+            GL.VertexPointer(4, VertexPointerType.Double, 0, 0);
+            GL.DrawArrays(BeginMode.TriangleFan, 0, eye_array.Length);
+
+            GL.PopMatrix();
+
+            //green part of eye
+            GL.PushMatrix();
+            GL.Color3(.65, .9, 0.1);
+
+            GL.Translate(-7, 3, 0.13);
+            GL.Scale(-.9, -.9, 0.0);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, eye_buffer);
+            GL.VertexPointer(4, VertexPointerType.Double, 0, 0);
+            GL.DrawArrays(BeginMode.TriangleFan, 0, eye_array.Length);
+
+            GL.PopMatrix();
+
+            //black center
+            GL.PushMatrix();
+            GL.Color3(0.01, 0.01, 0.01);
+
+            GL.Translate(-7, 3, 0.14);
+            GL.Scale(-.4, -.4, 0.0);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, eye_buffer);
+            GL.VertexPointer(4, VertexPointerType.Double, 0, 0);
+            GL.DrawArrays(BeginMode.TriangleFan, 0, eye_array.Length);
+
+            GL.PopMatrix();
+
+            GL.PushMatrix();
+
+            //renders the right eye
+
+
+            //black eye border
+            GL.PushMatrix();
+            GL.Color3(0.01, 0.01, 0.01);
+
+            GL.Translate(7, 3, 0.09);
+            GL.Scale(4.2, 4.2, 0.0);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, eye_buffer);
+            GL.VertexPointer(4, VertexPointerType.Double, 0, 0);
+            GL.DrawArrays(BeginMode.TriangleFan, 0, eye_array.Length);
+
+            GL.PopMatrix();
+
+
+            //orange outer eye
+            GL.PushMatrix();
+            GL.Color3(1.1, .35, 0.1);
+
+            GL.Translate(7, 3, 0.1);
+            GL.Scale(4.0, 4.0, 0.0);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, eye_buffer);
+            GL.VertexPointer(4, VertexPointerType.Double, 0, 0);
+            GL.DrawArrays(BeginMode.TriangleFan, 0, eye_array.Length);
+
+            GL.PopMatrix();
+
+
+            //yellow behind green
+            GL.PushMatrix();
+            GL.Color3(1.0, 1.0, 0);
+
+            GL.Translate(7.3, 3.2, 0.11);
+            GL.Rotate(35.0, Vector3d.UnitZ);
+            GL.Scale(2.4, 1.9, 0.0);
+
+
+            GL.BindBuffer(BufferTarget.ArrayBuffer, eye_buffer);
+            GL.VertexPointer(4, VertexPointerType.Double, 0, 0);
+            GL.DrawArrays(BeginMode.TriangleFan, 0, eye_array.Length);
+
+            GL.PopMatrix();
+
+            //black behind green
+            GL.PushMatrix();
+            GL.Color3(0.01, 0.01, 0.01);
+
+            GL.Translate(7, 3, 0.12);
+            GL.Scale(1.1, 1.1, 0.0);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, eye_buffer);
+            GL.VertexPointer(4, VertexPointerType.Double, 0, 0);
+            GL.DrawArrays(BeginMode.TriangleFan, 0, eye_array.Length);
+
+            GL.PopMatrix();
+
+            //green part of eye
+            GL.PushMatrix();
+            GL.Color3(.65, .9, 0.1);
+
+            GL.Translate(7, 3, 0.13);
+            GL.Scale(-.9, -.9, 0.0);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, eye_buffer);
+            GL.VertexPointer(4, VertexPointerType.Double, 0, 0);
+            GL.DrawArrays(BeginMode.TriangleFan, 0, eye_array.Length);
+
+            GL.PopMatrix();
+
+            //black center
+            GL.PushMatrix();
+            GL.Color3(0.01, 0.01, 0.01);
+
+            GL.Translate(7, 3, 0.14);
+            GL.Scale(-.4, -.4, 0.0);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, eye_buffer);
+            GL.VertexPointer(4, VertexPointerType.Double, 0, 0);
+            GL.DrawArrays(BeginMode.TriangleFan, 0, eye_array.Length);
+
+            GL.PopMatrix();
+        }
+
+        /// <summary>
+        /// Renders the back of the heart
+        /// </summary>
+        protected void render_back_heart()
+        {
+            GL.PushMatrix();
+            GL.Color3(0.5, 0.0, 0.5);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, bot_buffer);
+            GL.VertexPointer(4, VertexPointerType.Double, 0, 0);
+            GL.DrawArrays(BeginMode.Polygon, 0, bot_heart_array.Length);
+            GL.PopMatrix();
+        }
+
+        /// <summary>
+        /// Renders the border of the heart
+        /// </summary>
+        protected void render_border_heart()
+        {
+            GL.PushMatrix();
+            GL.Color3(0.25f, 0.0f, 0.25f);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, border_buffer);
+            GL.VertexPointer(4, VertexPointerType.Double, 0, 0);
+            GL.DrawArrays(BeginMode.QuadStrip, 0, border_array.Length);
+            GL.PopMatrix();
+        }
+
+        /// <summary>
+        /// Renders the front of the heart
+        /// </summary>
+        protected void render_front_heart()
+        {
+            GL.PushMatrix();
+            GL.Color3(0.5, 0.0, 0.5);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, top_buffer);
+            //glTexCoordPointer(2, GL_FLOAT, 5*sizeof(GLfloat), ((char*)NULL)+3*sizeof(GLfloat) 
+            GL.TexCoordPointer(4, TexCoordPointerType.Double, 8 * sizeof(double), 0);
+            GL.VertexPointer(4, VertexPointerType.Double, 8 * sizeof(double), 4 * sizeof(double));
+            GL.DrawArrays(BeginMode.Polygon, 0, top_heart_array.Length);
+            GL.PopMatrix();
+        }
+
+        /// <summary>
+        /// Renders all of the cones
+        /// </summary>
+        protected void render_cones()
+        {
+            double t1, t2;
+            double tz = -1.5;
+            Vector3 rotate;
+            int u = 1;
+
+            //begin render cones left edge
+            for (t1 = Math.PI - 1.2; t1 < Math.PI - .5; t1 += .2)
+            {
+                t2 = t1 + .1;
+                rotate = new Vector3((float)(16 * Math.Pow(Math.Sin(t1), 3) - (16 * Math.Pow(Math.Sin(t2), 3))),
+                                (float)(((13 * Math.Cos(t1)) - (5 * Math.Cos(2 * t1)) - (2 * Math.Cos(3 * t1)) - Math.Cos(4 * t1)) - ((13 * Math.Cos(t2)) - (5 * Math.Cos(2 * t2)) - (2 * Math.Cos(3 * t2)) - Math.Cos(4 * t2))),
+                                 0);
+                GL.PushMatrix();
+                GL.Translate(16 * Math.Pow(Math.Sin(t1), 3), (13 * Math.Cos(t1)) - (5 * Math.Cos(2 * t1)) - (2 * Math.Cos(3 * t1)) - Math.Cos(4 * t1), tz);
+                GL.Rotate(90, rotate);
+                GL.Translate(0, 0, -1);
+
+                //Decide which buffer we want to bind to and use for rendering
+                if (u == 5) u = 1;
+                switch (u)
+                {
+                    case 1:
+                        GL.BindBuffer(BufferTarget.ArrayBuffer, yellow_buffer);
+                        break;
+                    case 2:
+                        GL.BindBuffer(BufferTarget.ArrayBuffer, red_buffer);
+                        break;
+                    case 3:
+                        GL.BindBuffer(BufferTarget.ArrayBuffer, green_buffer);
+                        break;
+                    case 4:
+                        GL.BindBuffer(BufferTarget.ArrayBuffer, blue_buffer);
+                        break;
+                }
+
+                GL.VertexPointer(4, VertexPointerType.Double, 8 * sizeof(double), 0);
+                GL.ColorPointer(4, ColorPointerType.Double, 8 * sizeof(double), 4 * sizeof(double));
+                GL.DrawArrays(BeginMode.TriangleFan, 0, yellow_array.Length);
+                GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
+                GL.PopMatrix();
+                u++;
+            }
+
+            u = 1;
+
+            for (t1 = Math.PI + 1.2; t1 > Math.PI + .5; t1 -= .2)
+            {
+                t2 = t1 - .1;
+                rotate = new Vector3((float)(16 * Math.Pow(Math.Sin(t1), 3) - (16 * Math.Pow(Math.Sin(t2), 3))),
+                                (float)(((13 * Math.Cos(t1)) - (5 * Math.Cos(2 * t1)) - (2 * Math.Cos(3 * t1)) - Math.Cos(4 * t1)) - ((13 * Math.Cos(t2)) - (5 * Math.Cos(2 * t2)) - (2 * Math.Cos(3 * t2)) - Math.Cos(4 * t2))),
+                                 0);
+                GL.PushMatrix();
+                GL.Translate(16 * Math.Pow(Math.Sin(t1), 3), (13 * Math.Cos(t1)) - (5 * Math.Cos(2 * t1)) - (2 * Math.Cos(3 * t1)) - Math.Cos(4 * t1), tz);
+                GL.Rotate(-90, rotate);
+                GL.Translate(0, 0, -1);
+
+                //Decide which buffer we want to bind to and use for rendering
+                if (u == 5) u = 1;
+                switch (u)
+                {
+                    case 1:
+                        GL.BindBuffer(BufferTarget.ArrayBuffer, yellow_buffer);
+                        break;
+                    case 2:
+                        GL.BindBuffer(BufferTarget.ArrayBuffer, red_buffer);
+                        break;
+                    case 3:
+                        GL.BindBuffer(BufferTarget.ArrayBuffer, green_buffer);
+                        break;
+                    case 4:
+                        GL.BindBuffer(BufferTarget.ArrayBuffer, blue_buffer);
+                        break;
+                }
+
+                GL.VertexPointer(4, VertexPointerType.Double, 8 * sizeof(double), 0);
+                GL.ColorPointer(4, ColorPointerType.Double, 8 * sizeof(double), 4 * sizeof(double));
+                GL.DrawArrays(BeginMode.TriangleFan, 0, yellow_array.Length);
+                GL.PopMatrix();
+                u++;
+            }
+
+            //top right horn
+            t1 = 1.0;
+            t2 = 1.1;
+            rotate = new Vector3((float)(16 * Math.Pow(Math.Sin(t1), 3) - (16 * Math.Pow(Math.Sin(t2), 3))),
+                                (float)(((13 * Math.Cos(t1)) - (5 * Math.Cos(2 * t1)) - (2 * Math.Cos(3 * t1)) - Math.Cos(4 * t1)) - ((13 * Math.Cos(t2)) - (5 * Math.Cos(2 * t2)) - (2 * Math.Cos(3 * t2)) - Math.Cos(4 * t2))),
+                                 0);
+            GL.PushMatrix();
+            GL.Translate(16 * Math.Pow(Math.Sin(1.0), 3), (13 * Math.Cos(1.0)) - (5 * Math.Cos(2 * 1.0)) - (2 * Math.Cos(3 * 1.0)) - Math.Cos(4 * 1.0), -1.5);
+            GL.Rotate(90, rotate);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, yellow_buffer);
+            GL.VertexPointer(4, VertexPointerType.Double, 8 * sizeof(double), 0);
+            GL.ColorPointer(4, ColorPointerType.Double, 8 * sizeof(double), 4 * sizeof(double));
+            GL.DrawArrays(BeginMode.TriangleFan, 0, yellow_array.Length);
+            GL.PopMatrix();
+
+            //top left horn 
+            t1 = 5.28;
+            t2 = 5.38;
+            rotate = new Vector3((float)(16 * Math.Pow(Math.Sin(t1), 3) - (16 * Math.Pow(Math.Sin(t2), 3))),
+                                (float)(((13 * Math.Cos(t1)) - (5 * Math.Cos(2 * t1)) - (2 * Math.Cos(3 * t1)) - Math.Cos(4 * t1)) - ((13 * Math.Cos(t2)) - (5 * Math.Cos(2 * t2)) - (2 * Math.Cos(3 * t2)) - Math.Cos(4 * t2))),
+                                 0);
+            GL.PushMatrix();
+            GL.Translate(16 * Math.Pow(Math.Sin(5.28), 3), (13 * Math.Cos(5.28)) - (5 * Math.Cos(2 * 5.28)) - (2 * Math.Cos(3 * 5.28)) - Math.Cos(4 * 5.28), -1.5);
+            GL.Rotate(90, rotate);
+
+            //Vector4d temp = new Vector4d(0.0f, 0.0f, 1.0f, 1);
+            //GL.BufferSubData(BufferTarget.ArrayBuffer, new IntPtr(sizeof(double) * 4), new IntPtr(sizeof(double) * 4), ref temp);
+
+            GL.BindBuffer(BufferTarget.ArrayBuffer, yellow_buffer);
+            GL.VertexPointer(1, VertexPointerType.Double, 8 * sizeof(double), 0);
+            GL.ColorPointer(1, ColorPointerType.Double, 8 * sizeof(double), 4 * sizeof(double));
+            GL.DrawArrays(BeginMode.TriangleFan, 0, yellow_array.Length);
+            GL.PopMatrix();
+        }
+
+        /// <summary>
+        /// Called when it is time to render the next frame. Add your rendering code here.
+        /// typically beings with a call to GL.Clear() and ends with a call to swapbuffers
+        /// </summary>
+        /// <param name="e">Contains timing information.</param>
+        //protected override void OnRenderFrame(FrameEventArgs e)
+        //{
+        //    base.OnRenderFrame(e);
+        //    GL.Clear(ClearBufferMask.DepthBufferBit);
+        //    GL.Clear(ClearBufferMask.ColorBufferBit);
+
+        //    if (fill)
+        //        GL.PolygonMode(MaterialFace.FrontAndBack, PolygonMode.Fill);
+        //    else
+        //        GL.PolygonMode(MaterialFace.FrontAndBack, PolygonMode.Line);
+
+        //    GL.EnableClientState(ArrayCap.VertexArray);
+        //    GL.PushMatrix();
+
+        //    //Renders the back of the heart
+        //    //render_back_heart();
+
+        //    //Renders the border of the heart           
+        //    //render_border_heart();
+
+        //    //Render the Front Heart and its texture
+        //    GL.ClientActiveTexture(TextureUnit.Texture0);
+        //    GL.EnableClientState(ArrayCap.TextureCoordArray);
+        //    render_front_heart();
+        //    GL.DisableClientState(ArrayCap.TextureCoordArray);
+
+        //    //Renders the eyes
+        //    //render_eyes();
+
+        //    //Renders the cones and its colors
+        //    GL.EnableClientState(ArrayCap.ColorArray);
+        //    //render_cones();
+        //    GL.DisableClientState(ArrayCap.ColorArray);
+
+        //    //Done using vertex arrays
+        //    GL.DisableClientState(ArrayCap.VertexArray);
+
+        //    //drawing axes
+        //    GL.PushMatrix();
+        //    GL.Begin(BeginMode.Lines);
+        //    GL.Vertex3(0.0f, -200.0f, 0f);
+        //    GL.Vertex3(0.0f, 200.0f, 0f);
+        //    GL.End();
+        //    GL.PopMatrix();
+        //    GL.PushMatrix();
+        //    GL.Begin(BeginMode.Lines);
+        //    GL.Vertex3(0.0f, 0f, -200.0f);
+        //    GL.Vertex3(0.0f, 0f, 200.0f);
+        //    GL.End();
+        //    GL.PopMatrix();
+        //    GL.PushMatrix();
+        //    GL.Begin(BeginMode.Lines);
+        //    GL.Vertex3(-200.0f, 0f, 0f);
+        //    GL.Vertex3(200.0f, 0f, 0f);
+        //    GL.End();
+        //    GL.PopMatrix();
+        //    //finished drawing axes
+
+        //    GL.PopMatrix();
+
+        //    SwapBuffers();
+        //}
+
+        /// <summary>
+        /// Called when it is time to render the next frame. Add your rendering code here.
+        /// typically beings with a call to GL.Clear() and ends with a call to swapbuffers
+        /// </summary>
+        /// <param name="e">Contains timing information.</param>
+        protected override void OnRenderFrame(FrameEventArgs e)
+        {
+            base.OnRenderFrame(e);
+            GL.Clear(ClearBufferMask.DepthBufferBit);
+            GL.Clear(ClearBufferMask.ColorBufferBit);
+            GL.Clear(ClearBufferMask.AccumBufferBit);
+            GL.Clear(ClearBufferMask.StencilBufferBit);
+            if (fill)
+                GL.PolygonMode(MaterialFace.FrontAndBack, PolygonMode.Fill);
+            else
+                GL.PolygonMode(MaterialFace.FrontAndBack, PolygonMode.Line);
+
+            GL.PushMatrix();
+            GL.Enable(EnableCap.Texture2D);
+            GL.PushMatrix();
+            GL.CallList(heart_list);
+            GL.PopMatrix();
+            GL.Disable(EnableCap.Texture2D);
+
+            GL.EnableClientState(ArrayCap.VertexArray);
+
+            render_back_heart();
+
+            render_border_heart();
+               
+            create_top_heart();
+            //render_front_heart();
+
+            //GL.ClientActiveTexture(TextureUnit.Texture0);
+
+            //GL.EnableClientState(ArrayCap.TextureCoordArray);
+            //render_front_heart();
+            // GL.DisableClientState(ArrayCap.TextureCoordArray);
+            //render_eyes();
+
+            GL.EnableClientState(ArrayCap.ColorArray);
+            render_cones();
+            GL.DisableClientState(ArrayCap.ColorArray);
+
+
+
+            GL.DisableClientState(ArrayCap.VertexArray);
+            
+
+
+            //GL.Translate(0.0f, 0.0f, 0.0f);
+
+            /*
+            //drawing axes
+            GL.Begin(BeginMode.Lines);
+            GL.Vertex3(0.0f, -200.0f, 0f);
+            GL.Vertex3(0.0f, 200.0f, 0f);
+            GL.End();
+            GL.PopMatrix();
+            GL.PushMatrix();
+            GL.Begin(BeginMode.Lines);
+            GL.Vertex3(0.0f, 0f, -200.0f);
+            GL.Vertex3(0.0f, 0f, 200.0f);
+            GL.End();
+            GL.PopMatrix();
+            GL.PushMatrix();
+            GL.Begin(BeginMode.Lines);
+            GL.Vertex3(-200.0f, 0f, 0f);
+            GL.Vertex3(200.0f, 0f, 0f);
+            GL.End();
+            GL.PopMatrix();
+            //finished drawing axes
+            */
+            //GL.PushMatrix();
+            //GL.Translate(0.0f, 0.0f, -3.0f);
+            //GL.CallList(top_heart_list);
+            //GL.PopMatrix();
+
+
+            SwapBuffers();
+        }
+
+        /// <summary>
+        /// The main entry point for the application.
+        /// </summary>
+        [STAThread]
+        static void Main(String[] args)
+        {
+            // The 'using' idiom guarantees proper resource cleanup.
+            // We request 30 UpdateFrame events per second, and unlimited
+            // RenderFrame events (as fast as the computer can handle).
+            using (Program game = new Program())
+            {
+                game.Run(30.0);
+                //GL.DeleteBuffers(1, ref yellow_buffer);
+                //GL.DeleteBuffers(1, ref top_buffer);
+                //GL.DeleteBuffers(1, ref bot_buffer);
+                //GL.DeleteBuffers(1, ref border_buffer);
+                //GL.DeleteBuffers(1, ref eye_buffer);               
+            }
+        }
+    }
+}
+
+/* this code replaces buffer data 
+ *  but it changes it for everything instead of tthe oens after this line
+ */
+
+//Vector4d temp = new Vector4d(1.0f, 0.0f, 0.0f, 1);
+//GL.BufferSubData(BufferTarget.ArrayBuffer, new IntPtr(sizeof(double) * 4), new IntPtr(sizeof(double) * 4), ref temp);
+
+/// <summary>
+/// using the parametric equation
+/// x = r * cos(t)
+/// y = r * sin(t)
+/// </summary>
+//protected void fill_yellow_array()
+//{
+//    double x, y;
+//    List<Vector4d> c_list = new List<Vector4d>();
+//    List<Vector4d> c2_list = new List<Vector4d>();
+//    List<Vector4d> final_list = new List<Vector4d>();
+//    //peak
+//    //c_list.Add(new Vector4d(0.0f, 0.0f, 8.0f, 1));
+//    //c_list.Add(new Vector4d(1.0f, 0.0f, 0.0f, 1));
+
+//    double h = 0;
+//    int counter = 0;
+//    Vector4d v;
+
+//    for (double r = 1.5; r > 0; r -= .01)
+//    {
+//        for (double t = 2 * Math.PI; t >= 0; t -= 1)
+//        {
+//            x = r * Math.Cos(t);
+//            y = r * Math.Sin(t);
+//            v = new Vector4d(1.0f, 1.0f, 0.0f, 1);
+
+//            if (counter   2 == 0)
+//            {
+//                c_list.Add(new Vector4d((float)x, (float)y, h, 1));
+//                c_list.Add(v);
+//            }
+//            else
+//            {
+//                c2_list.Add(new Vector4d((float)x, (float)y, h, 1));
+//                c2_list.Add(v);
+//            }
+//        }
+//        counter++;
+//        h += .06;
+//    }
+
+//    var c_array = c_list.ToArray();
+//    var c2_array = c2_list.ToArray();
+
+//    for (int i = 0; i < c_list.Count - 3; i++)
+//    {
+//        final_list.Add(c_array[i]);
+//        final_list.Add(c_array[i + 1]);
+//        final_list.Add(c_array[i + 2]);
+//        final_list.Add(c_array[i + 3]);
+
+//        final_list.Add(c2_array[i + 2]);
+//        final_list.Add(c2_array[i + 3]);
+//        final_list.Add(c2_array[i]);
+//        final_list.Add(c2_array[i + 1]);
+//    }
+
+//    yellow_array = final_list.ToArray();
+//}

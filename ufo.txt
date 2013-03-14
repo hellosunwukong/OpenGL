@@ -1,0 +1,1267 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Drawing;
+using System.Diagnostics;
+using System.IO;
+using System.Drawing.Imaging;
+using System.Timers;
+
+using OpenTK;
+using OpenTK.Graphics;
+using OpenTK.Input;
+
+/*To do:
+ * 
+ * 
+ * 
+ * 
+ * 
+ * */
+namespace StarterKit
+{
+    class Game : GameWindow
+    {
+        float[] light0_pos = new float[4] { 0.0f, 5.0f, 10.0f, 1.0f };
+        float[] light0_color = new float[4] { 1.0f, 1.0f, 1.0f, 1.0f };
+        float[] light0_ambient = new float[4] { 0.0f, 0.0f, 0.0f, 1.0f };
+        float[] light0_direction = new float[3] { 0.0f, 0.0f, -1.0f };
+        float[] light0_emissive = new float[4] { 0.5f, 0.0f, 0.0f, 1.0f };
+        float[] light0_diffuse = new float[4] { 1.0f, 0.9f, 0.05f, 1.0f };
+
+        float[] light1_color = new float[4] { 0.0f, 0.5f, 0.0f, 1.0f };
+        float[] light1_ambient = new float[4] { 0.0f, 0.0f, 0.0f, 1.0f };
+        float[] light1_direction = new float[3] { 0.0f, 0.0f, -1.0f };
+        float[] light1_diffuse = new float[4] { 0.0f, 0.5f, 0.0f, 1.0f };
+        float alpha_interpol = 0;
+        //Chrome
+        float[] chrome_ambi = new float[4] { 0.250000f, 0.250000f, 0.250000f, 1.000000f };
+        float[] chrome_diff = new float[4] { 0.400000f, 0.400000f, 0.400000f, 1.000000f };
+        float[] chrome_spec = new float[4] { 0.774597f, 0.774597f, 0.774597f, 1.000000f };
+        //Emerald
+        float[] emerald_ambi = new float[4] { 0.021500f, 0.174500f, 0.021500f, 0.550000f };
+        float[] emerald_diff = new float[4] { 0.075680f, 0.614240f, 0.075680f, 0.550000f };
+        float[] emerald_spec = new float[4] { 0.633000f, 0.727811f, 0.633000f, 0.550000f };
+        //Obsidian
+        float[] obsidian_ambi = new float[4] { 0.053750f, 0.050000f, 0.066250f, 0.820000f };
+        float[] obsidian_diff = new float[4] { 0.182750f, 0.170000f, 0.225250f, 0.820000f };
+        float[] obsidian_spec = new float[4] { 0.332741f, 0.328634f, 0.346435f, 0.820000f };
+
+        Timer timer1 = new Timer(50);
+        int timercount = 0;
+        float spin = 0;
+        bool filltype = false, is_animating = false, emissive = true, ufo_spin = false;
+
+        Vector4d[] dome1_array, dome2_array, dome3_array, dome4_array, dome5_array, dome6_array, dome7_array,
+            dome8_array, dome9_array, dome10_array, inner_light_array, upper_green_array;
+        Vector4d[] inner_to_base, bot_middle_to_base, upper_mid_to_bot_mid, mid_to_uppermid, lower_green_tomid,
+            upper_green_tolowergreen, last_to_uppergreen;
+        Vector4d[] oneto2, twoto3, threeto4, fourto5, fiveto6, sixto7, sevento8, eighto9, nineto10;
+        Vector3d[] normal_bot_middle_to_base, normal_inner_to_base, normal_upper_green_tolowergreen,
+
+normal_lower_green_to_mid, normal_mid_to_uppermid, normal_upper_mid_to_bot_mid, normal_last_to_uppergreen;
+        Vector3d[] normal_oneto2, normal_twoto3, normal_threeto4, normal_fourto5, normal_fiveto6, normal_sixto7,
+
+normal_sevento8, normal_eighto9, normal_nineto10;
+
+        IntPtr sphere, cylinder;
+        Matrix4 modelview, camera_cf, ufo_cf, ufo_startcf, ufo_finalcf, spacestation_cf;
+
+        uint oneto2buffer, twoto3buffer, threeto4buffer, fourto5buffer, fiveto6buffer, sixto7buffer,
+            sevento8buffer, eightto9buffer, nineto10buffer;
+        uint botbuffer1, botbuffer2, botbuffer3, botbuffer4, botbuffer5, botbuffer6, botbuffer7;
+
+
+
+        /// <summary>Creates a 800x600 window with the specified title.</summary>
+        public Game()
+            : base(800, 600, OpenTK.Graphics.GraphicsMode.Default, "CS 367 Project 2")
+        {
+            VSync = VSyncMode.On;
+        }
+
+        #region Buffers
+
+        /// <summary>
+        /// Calculates the vertices of each circle the UFO is composed of.
+        /// </summary>
+        /// <param name="scale"></param>
+        private void init_ufo(int scale)
+        {
+            //For the lower half of the UFO
+            List<Vector4d> base_circle = new List<Vector4d>();
+            List<Vector4d> inner_light_circle = new List<Vector4d>();
+            List<Vector4d> bottom_middle_circle = new List<Vector4d>();
+            List<Vector4d> upper_middle_circle = new List<Vector4d>();
+            List<Vector4d> mid_circle = new List<Vector4d>();
+            List<Vector4d> lower_green_circle = new List<Vector4d>();
+            List<Vector4d> upper_green_circle = new List<Vector4d>();
+            List<Vector4d> strips = new List<Vector4d>();
+
+            //For the top half of the UFO
+            List<Vector4d> dome1 = new List<Vector4d>();
+            List<Vector4d> dome2 = new List<Vector4d>();
+            List<Vector4d> dome3 = new List<Vector4d>();
+            List<Vector4d> dome4 = new List<Vector4d>();
+            List<Vector4d> dome5 = new List<Vector4d>();
+            List<Vector4d> dome6 = new List<Vector4d>();
+            List<Vector4d> dome7 = new List<Vector4d>();
+            List<Vector4d> dome8 = new List<Vector4d>();
+            List<Vector4d> dome9 = new List<Vector4d>();
+            List<Vector4d> dome10 = new List<Vector4d>();
+
+            Vector4d[] base_array, bottom_middle_array, upper_middle_array, mid_array, lower_green_array;
+
+            //Filling the bottom half of the UFO lists
+            double x, y;
+            double height_per_dome = 1.5 * scale / 10;
+            double width_per_dome = 3.8 * scale / 10 / 2;
+
+            for (double t = 2 * Math.PI; t >= 0; t -= .1)
+            {
+                x = 1 * Math.Cos(t) * scale;
+                y = 1 * Math.Sin(t) * scale;
+                base_circle.Add(new Vector4d((float)x, (float)y, 0.0f * scale, 1));
+
+                x = 0.8 * Math.Cos(t) * scale;
+                y = 0.8 * Math.Sin(t) * scale;
+                inner_light_circle.Add(new Vector4d((float)x, (float)y, 0.2f * scale, 1));
+
+                x = 2.5 * Math.Cos(t) * scale;
+                y = 2.5 * Math.Sin(t) * scale;
+                bottom_middle_circle.Add(new Vector4d((float)x, (float)y, 0.5f * scale, 1));
+
+                x = 2.5 * Math.Cos(t) * scale;
+                y = 2.5 * Math.Sin(t) * scale;
+                upper_middle_circle.Add(new Vector4d((float)x, (float)y, 0.6f * scale, 1));
+
+                x = 3.5 * Math.Cos(t) * scale;
+                y = 3.5 * Math.Sin(t) * scale;
+                mid_circle.Add(new Vector4d((float)x, (float)y, 1.0f * scale, 1));
+
+                x = 3.5 * Math.Cos(t) * scale;
+                y = 3.5 * Math.Sin(t) * scale;
+                lower_green_circle.Add(new Vector4d((float)x, (float)y, 1.1f * scale, 1));
+
+                x = 3.8 * Math.Cos(t) * scale;
+                y = 3.8 * Math.Sin(t) * scale;
+                upper_green_circle.Add(new Vector4d((float)x, (float)y, 1.5f * scale, 1));
+
+                //Filling the Dome List
+                x = width_per_dome / 2 * Math.Cos(t) * scale;
+                y = width_per_dome / 2 * Math.Sin(t) * scale;
+                dome1.Add(new Vector4d((float)x, (float)y, 3.0f * scale, 1));
+
+                x = width_per_dome * 2 * Math.Cos(t) * scale;
+                y = width_per_dome * 2 * Math.Sin(t) * scale;
+                dome2.Add(new Vector4d((float)x, (float)y, ((3.0f * scale) - (height_per_dome * 2)), 1));
+
+                x = width_per_dome * 3 * Math.Cos(t) * scale;
+                y = width_per_dome * 3 * Math.Sin(t) * scale;
+                dome3.Add(new Vector4d((float)x, (float)y, ((3.0f * scale) - (height_per_dome * 3)), 1));
+
+                x = width_per_dome * 4 * Math.Cos(t) * scale;
+                y = width_per_dome * 4 * Math.Sin(t) * scale;
+                dome4.Add(new Vector4d((float)x, (float)y, ((3.0f * scale) - (height_per_dome * 4)), 1));
+
+                x = width_per_dome * 5 * Math.Cos(t) * scale;
+                y = width_per_dome * 5 * Math.Sin(t) * scale;
+                dome5.Add(new Vector4d((float)x, (float)y, ((3.0f * scale) - (height_per_dome * 5)), 1));
+
+                x = width_per_dome * 6 * Math.Cos(t) * scale;
+                y = width_per_dome * 6 * Math.Sin(t) * scale;
+                dome6.Add(new Vector4d((float)x, (float)y, ((3.0f * scale) - (height_per_dome * 6)), 1));
+
+                x = width_per_dome * 7 * Math.Cos(t) * scale;
+                y = width_per_dome * 7 * Math.Sin(t) * scale;
+                dome7.Add(new Vector4d((float)x, (float)y, ((3.0f * scale) - (height_per_dome * 7)), 1));
+
+                x = width_per_dome * 8 * Math.Cos(t) * scale;
+                y = width_per_dome * 8 * Math.Sin(t) * scale;
+                dome8.Add(new Vector4d((float)x, (float)y, ((3.0f * scale) - (height_per_dome * 8)), 1));
+
+                x = width_per_dome * 9 * Math.Cos(t) * scale;
+                y = width_per_dome * 9 * Math.Sin(t) * scale;
+                dome9.Add(new Vector4d((float)x, (float)y, ((3.0f * scale) - (height_per_dome * 9)), 1));
+
+                x = width_per_dome * 10 * Math.Cos(t) * scale;
+                y = width_per_dome * 10 * Math.Sin(t) * scale;
+                dome10.Add(new Vector4d((float)x, (float)y, ((3.0f * scale) - (height_per_dome * 10)), 1));
+            }
+
+            //convert the lists to the arrays
+            base_array = base_circle.ToArray();
+            inner_light_array = inner_light_circle.ToArray();
+            bottom_middle_array = bottom_middle_circle.ToArray();
+            upper_middle_array = upper_middle_circle.ToArray();
+            mid_array = mid_circle.ToArray();
+            lower_green_array = lower_green_circle.ToArray();
+            upper_green_array = upper_green_circle.ToArray();
+
+            dome1_array = dome1.ToArray();
+            dome2_array = dome2.ToArray();
+            dome3_array = dome3.ToArray();
+            dome4_array = dome4.ToArray();
+            dome5_array = dome5.ToArray();
+            dome6_array = dome6.ToArray();
+            dome7_array = dome7.ToArray();
+            dome8_array = dome8.ToArray();
+            dome9_array = dome9.ToArray();
+            dome10_array = dome10.ToArray();
+
+            //bottom_middle_circle and base_circle quad strip
+            bot_middle_to_base = construct_quads(bottom_middle_array, base_array, ref normal_bot_middle_to_base);
+
+            //upper_middle_circle and bottom_middle_circle quad strip
+            upper_mid_to_bot_mid = construct_quads(upper_middle_array, bottom_middle_array, ref 
+
+normal_upper_mid_to_bot_mid);
+
+            //mid_circle and upper_middle_circle quad strip
+            mid_to_uppermid = construct_quads(mid_array, upper_middle_array, ref normal_mid_to_uppermid);
+
+            //lower_green_circle and mid_circle quad strip
+            lower_green_tomid = construct_quads(lower_green_array, mid_array, ref normal_lower_green_to_mid);
+
+            //upper_green_circle and lower_green_circle quad strip
+            upper_green_tolowergreen = construct_quads(upper_green_array, lower_green_array, ref 
+
+normal_upper_green_tolowergreen);
+
+
+            inner_to_base = construct_quads(base_array, inner_light_array, ref normal_inner_to_base);
+        }
+
+        /// <summary>
+        /// Calls contruct_quads for each pair of circles
+        /// </summary>
+        public void make_dome()
+        {
+            //dome 1 and dome 2          
+            oneto2 = construct_quads(dome1_array, dome2_array, ref normal_oneto2);
+
+            //dome 2 and dome 3           
+            twoto3 = construct_quads(dome2_array, dome3_array, ref normal_twoto3);
+
+            //dome 3 and dome 4            
+            threeto4 = construct_quads(dome3_array, dome4_array, ref normal_threeto4);
+
+            //dome 4 and dome 5           
+            fourto5 = construct_quads(dome4_array, dome5_array, ref normal_fourto5);
+
+            //dome 5 and dome 6          
+            fiveto6 = construct_quads(dome5_array, dome6_array, ref normal_fiveto6);
+
+            //dome 6 and dome 7           
+            sixto7 = construct_quads(dome6_array, dome7_array, ref normal_sixto7);
+
+            //dome 7 and dome 8            
+            sevento8 = construct_quads(dome7_array, dome8_array, ref normal_sevento8);
+
+            //dome 8 and dome 9           
+            eighto9 = construct_quads(dome8_array, dome9_array, ref normal_eighto9);
+
+            //dome 9 and dome 10
+            nineto10 = construct_quads(dome9_array, dome10_array, ref normal_nineto10);
+
+            //dome last and upper_green_circle
+            last_to_uppergreen = construct_quads(dome10_array, upper_green_array, ref normal_last_to_uppergreen);
+
+        }
+
+        /// <summary>
+        /// Calculates the normal vector for the plane composed of the three points.
+        /// </summary>
+        /// <param name="first"></param>
+        /// <param name="second"></param>
+        /// <param name="third"></param>
+        /// <returns></returns>
+        private Vector3d calculateNormal(Vector4d first, Vector4d second, Vector4d third)
+        {
+            Vector3d first3, second3, third3, normal3;
+            Vector3d planeVector1, planeVector2;
+            first3.X = first.X;
+            first3.Y = first.Y;
+            first3.Z = first.Z;
+            second3.X = second.X;
+            second3.Y = second.Y;
+            second3.Z = second.Z;
+            third3.X = third.X;
+            third3.Y = third.Y;
+            third3.Z = third.Z;
+
+            planeVector1 = Vector3d.Subtract(first3, second3);
+            planeVector2 = Vector3d.Subtract(third3, second3);
+            normal3 = Vector3d.Cross(planeVector2, planeVector1);
+
+            GL.Enable(EnableCap.Normalize);
+            return normal3;
+        }
+
+        /// <summary>
+        /// Constructs an Array of Quads from the two arrays passed in.
+        /// </summary>
+        /// <param name="first"></param>
+        /// <param name="second"></param>
+        /// <param name="normals"></param>
+        /// <returns></returns>
+        public Vector4d[] construct_quads(Vector4d[] first, Vector4d[] second, ref Vector3d[] normals)
+        {
+            Vector3d normal;
+            Vector4d[] output;
+            List<Vector4d> outputlist = new List<Vector4d>();
+            List<Vector3d> normalOutputList = new List<Vector3d>();
+
+            normal.X = first[0].X;
+            normal.Y = first[0].Y;
+            normal.Z = first[0].Z;
+
+            for (int i = 0; i < first.Length - 1; i++)
+            {
+                outputlist.Add(first[i]);
+                outputlist.Add(first[i + 1]);
+                outputlist.Add(second[i + 1]);
+                outputlist.Add(second[i]);
+
+                //add four times for four points;
+                normal = calculateNormal(first[i], first[i + 1], second[i + 1]);
+                normalOutputList.Add(normal);
+                normalOutputList.Add(normal);
+                normalOutputList.Add(normal);
+                normalOutputList.Add(normal);
+            }
+
+            outputlist.Add(first[0]);
+            outputlist.Add(second[0]);
+            outputlist.Add(second[first.Length - 1]);
+            outputlist.Add(first[second.Length - 1]);
+
+            normal = calculateNormal(first[0], second[0], second[second.Length - 1]);
+            normalOutputList.Add(normal);
+            normalOutputList.Add(normal);
+            normalOutputList.Add(normal);
+            normalOutputList.Add(normal);
+
+            output = outputlist.ToArray();
+            normals = normalOutputList.ToArray();
+            return output;
+        }
+
+        /// <summary>
+        /// Sets up the buffers for the UFO
+        /// </summary>
+        protected void setUpBuffers()
+        {
+            //inner_to_base, bot_middle_to_base, upper_mid_to_bot_mid, mid_to_uppermid, lower_green_tomid, 
+
+            //upper_green_tolowergreen, last_to_uppergreen;
+            GL.GenBuffers(1, out botbuffer1);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, botbuffer1);
+            GL.BufferData(BufferTarget.ArrayBuffer, new IntPtr(inner_to_base.Length * sizeof(double) * 4), inner_to_base, BufferUsageHint.StaticDraw);
+
+            GL.GenBuffers(1, out botbuffer2);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, botbuffer2);
+            GL.BufferData(BufferTarget.ArrayBuffer, new IntPtr(bot_middle_to_base.Length * sizeof(double) * 4),
+
+bot_middle_to_base, BufferUsageHint.StaticDraw);
+
+            GL.GenBuffers(1, out botbuffer3);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, botbuffer3);
+            GL.BufferData(BufferTarget.ArrayBuffer, new IntPtr(upper_mid_to_bot_mid.Length * sizeof(double) * 4),
+
+upper_mid_to_bot_mid, BufferUsageHint.StaticDraw);
+
+            GL.GenBuffers(1, out botbuffer4);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, botbuffer4);
+            GL.BufferData(BufferTarget.ArrayBuffer, new IntPtr(mid_to_uppermid.Length * sizeof(double) * 4),
+
+mid_to_uppermid, BufferUsageHint.StaticDraw);
+
+            GL.GenBuffers(1, out botbuffer5);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, botbuffer5);
+            GL.BufferData(BufferTarget.ArrayBuffer, new IntPtr(lower_green_tomid.Length * sizeof(double) * 4),
+
+lower_green_tomid, BufferUsageHint.StaticDraw);
+
+            GL.GenBuffers(1, out botbuffer6);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, botbuffer6);
+            GL.BufferData(BufferTarget.ArrayBuffer, new IntPtr(upper_green_tolowergreen.Length * sizeof(double) *
+
+4), upper_green_tolowergreen, BufferUsageHint.StaticDraw);
+
+            GL.GenBuffers(1, out botbuffer7);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, botbuffer7);
+            GL.BufferData(BufferTarget.ArrayBuffer, new IntPtr(last_to_uppergreen.Length * sizeof(double) * 4),
+
+upper_green_tolowergreen, BufferUsageHint.StaticDraw);
+
+            domeBuffers();
+        }
+
+        /// <summary>
+        /// Buffers for the top half of the UFO
+        /// </summary>
+        private void domeBuffers()
+        {
+            //oneto2buffer, twoto3buffer, threeto4buffer, fourto5buffer, fiveto6buffer, sixto7buffer, 
+
+            //sevento8buffer, eightto9buffer, nineto10buffer, tento11buffer, elevento12buffer, twelveto13buffer, 
+
+            //fifteento16buffer, sixteento17buffer, seventeento18buffer, eighteento19buffer, nineteento20buffer;
+            GL.GenBuffers(1, out oneto2buffer);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, oneto2buffer);
+            GL.BufferData(BufferTarget.ArrayBuffer, new IntPtr(oneto2.Length * sizeof(double) * 4), oneto2,
+
+BufferUsageHint.StaticDraw);
+
+            GL.GenBuffers(1, out twoto3buffer);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, twoto3buffer);
+            GL.BufferData(BufferTarget.ArrayBuffer, new IntPtr(twoto3.Length * sizeof(double) * 4), twoto3,
+
+BufferUsageHint.StaticDraw);
+
+            GL.GenBuffers(1, out threeto4buffer);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, threeto4buffer);
+            GL.BufferData(BufferTarget.ArrayBuffer, new IntPtr(threeto4.Length * sizeof(double) * 4), threeto4,
+
+BufferUsageHint.StaticDraw);
+
+            GL.GenBuffers(1, out fourto5buffer);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, fourto5buffer);
+            GL.BufferData(BufferTarget.ArrayBuffer, new IntPtr(fourto5.Length * sizeof(double) * 4), fourto5,
+
+BufferUsageHint.StaticDraw);
+
+            GL.GenBuffers(1, out fiveto6buffer);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, fiveto6buffer);
+            GL.BufferData(BufferTarget.ArrayBuffer, new IntPtr(fiveto6.Length * sizeof(double) * 4), fiveto6,
+
+BufferUsageHint.StaticDraw);
+
+            GL.GenBuffers(1, out sixto7buffer);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, sixto7buffer);
+            GL.BufferData(BufferTarget.ArrayBuffer, new IntPtr(sixto7.Length * sizeof(double) * 4), sixto7,
+
+BufferUsageHint.StaticDraw);
+
+            GL.GenBuffers(1, out sevento8buffer);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, sevento8buffer);
+            GL.BufferData(BufferTarget.ArrayBuffer, new IntPtr(sevento8.Length * sizeof(double) * 4), sevento8,
+
+BufferUsageHint.StaticDraw);
+
+            GL.GenBuffers(1, out eightto9buffer);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, eightto9buffer);
+            GL.BufferData(BufferTarget.ArrayBuffer, new IntPtr(eighto9.Length * sizeof(double) * 4), eighto9,
+
+BufferUsageHint.StaticDraw);
+
+            GL.GenBuffers(1, out nineto10buffer);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, nineto10buffer);
+            GL.BufferData(BufferTarget.ArrayBuffer, new IntPtr(nineto10.Length * sizeof(double) * 4), nineto10,
+
+BufferUsageHint.StaticDraw);
+        }
+
+        #endregion
+
+        #region Movement Controls
+
+        /// <summary>
+        /// Controls for the Space Station
+        /// </summary>
+        /// <param name="e"></param>
+        protected void spaceStationMovement(FrameEventArgs e)
+        {
+            //Left, Right, Up, Down
+            if (Keyboard[Key.Left])
+                spacestation_cf = Matrix4.CreateTranslation(0.0f, 1.0f, 0.0f) * spacestation_cf;
+            if (Keyboard[Key.Right])
+                spacestation_cf = Matrix4.CreateTranslation(0.0f, -1.0f, 0.0f) * spacestation_cf;
+            if (Keyboard[Key.Up])
+                spacestation_cf = Matrix4.CreateTranslation(1.0f, -0.0f, 0.0f) * spacestation_cf;
+            if (Keyboard[Key.Down])
+                spacestation_cf = Matrix4.CreateTranslation(-1.0f, -0.0f, 0.0f) * spacestation_cf;
+
+            //Rotating along the Y axis
+            if (Keyboard[Key.O])
+                spacestation_cf = Matrix4.CreateRotationY(-.1f) * spacestation_cf;
+            if (Keyboard[Key.P])
+                spacestation_cf = Matrix4.CreateRotationY(.1f) * spacestation_cf;
+
+            //Rotating along the X axis
+            if (Keyboard[Key.Number9])
+                spacestation_cf = Matrix4.CreateRotationX(-.1f) * spacestation_cf;
+            if (Keyboard[Key.Number0])
+                spacestation_cf = Matrix4.CreateRotationX(.1f) * spacestation_cf;
+
+            //Up and down the Z axis
+            if (Keyboard[Key.Plus])
+                spacestation_cf = Matrix4.CreateTranslation(0.0f, 0.0f, 1.0f) * spacestation_cf;
+            if (Keyboard[Key.Minus])
+                spacestation_cf = Matrix4.CreateTranslation(0.0f, 0.0f, -1.0f) * spacestation_cf;
+
+        }
+
+        /// <summary>
+        /// Controls for the rocket
+        /// </summary>
+        /// <param name="e"></param>
+        protected void ufoMovement(FrameEventArgs e)
+        {
+            //Forward, back, Left, Right
+            if (Keyboard[Key.A])
+                ufo_cf = Matrix4.CreateTranslation(0.0f, 1.0f, 0.0f) * ufo_cf;
+            if (Keyboard[Key.D])
+                ufo_cf = Matrix4.CreateTranslation(0.0f, -1.0f, 0.0f) * ufo_cf;
+            if (Keyboard[Key.W])
+                ufo_cf = Matrix4.CreateTranslation(1.0f, -0.0f, 0.0f) * ufo_cf;
+            if (Keyboard[Key.S])
+                ufo_cf = Matrix4.CreateTranslation(-1.0f, -0.0f, 0.0f) * ufo_cf;
+
+            //Rotating along the Y axis
+            if (Keyboard[Key.Number1])
+                ufo_cf = Matrix4.CreateRotationY(-.1f) * ufo_cf;
+            if (Keyboard[Key.Number2])
+                ufo_cf = Matrix4.CreateRotationY(.1f) * ufo_cf;
+
+            //Rotating along the X axis
+            if (Keyboard[Key.Q])
+                ufo_cf = Matrix4.CreateRotationX(-.1f) * ufo_cf;
+            if (Keyboard[Key.E])
+                ufo_cf = Matrix4.CreateRotationX(.1f) * ufo_cf;
+
+            //Up and Down the Z axis
+            if (Mouse[MouseButton.Left])
+                ufo_cf = Matrix4.CreateTranslation(0.0f, 0.0f, 1.0f) * ufo_cf;
+            if (Mouse[MouseButton.Right])
+                ufo_cf = Matrix4.CreateTranslation(0.0f, 0.0f, -1.0f) * ufo_cf;
+        }
+
+        /// <summary>
+        /// Controls for moving the camera
+        /// </summary>
+        /// <param name="e"></param>
+        private void cameraMovement(FrameEventArgs e)
+        {
+            //Rotating along the X axis
+            if (Keyboard[Key.Keypad1])
+                camera_cf = Matrix4.CreateRotationX(-.1f) * camera_cf;
+            if (Keyboard[Key.Keypad3])
+                camera_cf = Matrix4.CreateRotationX(.1f) * camera_cf;
+
+            //Rotating along the Y axis
+            if (Keyboard[Key.Keypad7])
+                camera_cf = Matrix4.CreateRotationY(-.1f) * camera_cf;
+            if (Keyboard[Key.Keypad9])
+                camera_cf = Matrix4.CreateRotationY(.1f) * camera_cf;
+
+            //Up and Down the Z axis
+            if (Keyboard[Key.KeypadMinus])
+                camera_cf = Matrix4.CreateTranslation(0.0f, 0.0f, .2f) * camera_cf;
+            if (Keyboard[Key.KeypadPlus])
+                camera_cf = Matrix4.CreateTranslation(0.0f, 0.0f, -.2f) * camera_cf;
+
+            //Left and Right on the Y axis
+            if (Keyboard[Key.Keypad4])
+                camera_cf = Matrix4.CreateTranslation(0.0f, .2f, 0.0f) * camera_cf;
+            if (Keyboard[Key.Keypad6])
+                camera_cf = Matrix4.CreateTranslation(0.0f, -.2f, 0.0f) * camera_cf;
+
+            //Forward and Back on the X axis
+            if (Keyboard[Key.Keypad5])
+                camera_cf = Matrix4.CreateTranslation(-0.2f, 0.0f, 0.0f) * camera_cf;
+            if (Keyboard[Key.Keypad8])
+                camera_cf = Matrix4.CreateTranslation(0.2f, 0.0f, 0.0f) * camera_cf;
+        }
+
+        /// <summary>
+        /// Spins the space station by 2.0f each second
+        /// </summary>
+        private void spinSpaceStation()
+        {
+            spin = spin + 2.0f;
+            if (spin > 360.0f)
+                spin -= 360.0f;
+        }
+
+        #endregion
+
+        #region Event Handlers
+
+        /// <summary>Load resources here.</summary>
+        /// <param name="e">Not used.</param>
+        protected override void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
+            /*
+             * 		ufo_cf	{(1, 0, 0, 0)
+                             (0, -0.9040731, 0.4273801, 0)
+                             (0, -0.4273801, -0.9040731, 0)
+                             (-33, -1.442139, 38.19209, 1)}	OpenTK.Matrix4
+
+             * */
+            sphere = Glu.NewQuadric();
+            cylinder = Glu.NewQuadric();
+            Vector4 row0 = new Vector4(0.03160404f, 0.608945f, -0.7925827f, 0f);
+            Vector4 row1 = new Vector4(-0.9942653f, 0.1002108f, 0.03734639f, 0f);
+            Vector4 row2 = new Vector4(0.1021673f, 0.786857f, 0.6086198f, 0f);
+            Vector4 row3 = new Vector4(0f, 1.788139E-06f, -64.03124f, 1f);
+            camera_cf.Row0 = row0;
+            camera_cf.Row1 = row1;
+            camera_cf.Row2 = row2;
+            camera_cf.Row3 = row3;
+
+            ufo_finalcf = new Matrix4(1f, 0f, 0f, 0f, 0f,
+                                      -0.9040731f, 0.4273801f, 0f, 0f,
+                                      -0.4273801f, -0.9040731f, 0f,
+                                      -33f, -1.442139f, 38.19209f, 1f);
+            ufo_startcf = new Matrix4(1f, 0f, 0f, 0f,
+                0f, 0.994532f, -0.1044385f, 0f,
+                0f, 0.1044385f, 0.994532f, 0f,
+                -4f, 29.95664f, -1.812712f, 1f);
+
+            ufo_cf = new Matrix4(0.921061f, 0.07913148f, 0.381294f, 0f
+                    , 0.03887697f, 0.9555604f, -0.2922235f, 0f
+                    , -0.3874729f, 0.2839792f, 0.8770531f, 0f
+                    , -14.08688f, 21.13233f, 28.20965f, 1f);
+            spacestation_cf = new Matrix4(1f, 0f, -8.876182E-09f, 0f,
+                                2.623091E-09f, 0.9553365f, 0.2955203f, 0f,
+                                8.47974E-09f, -0.2955202f, 0.9553366f, 0f,
+                                -11f, -7f, -2f, 1f);
+
+            //GL.LoadIdentity();
+            //GL.GetFloat(GetPName.ModelviewMatrix, out ufo_cf);
+            //GL.GetFloat(GetPName.ModelviewMatrix, out spacestation_cf);
+            //    (0.03160404f, 0.608945f, -0.7925827f, 0f)
+            //(-0.9942653, 0.1002108, 0.03734639, 0)
+            //(0.1021673, 0.786857, 0.6086198, 0)
+            //(0, 1.788139E-06,     -64.03124, 1)}	;
+
+            timer1.Elapsed += new ElapsedEventHandler(OnTimedEvent);
+
+
+
+            GL.ClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+            GL.PolygonMode(MaterialFace.Front, PolygonMode.Fill);
+            GL.PolygonMode(MaterialFace.Front, PolygonMode.Line);
+
+            GL.Enable(EnableCap.DepthTest);
+            GL.ColorMaterial(MaterialFace.Front, ColorMaterialParameter.AmbientAndDiffuse);
+            GL.Enable(EnableCap.Lighting);
+            GL.Enable(EnableCap.DepthTest);
+            GL.Enable(EnableCap.Normalize);
+            GL.ShadeModel(ShadingModel.Smooth);
+
+            init_ufo(2);
+            make_dome();
+
+            setUpBuffers();
+
+            GL.Enable(EnableCap.Light0);
+            GL.Light(LightName.Light0, LightParameter.Ambient, light0_ambient);
+            GL.Light(LightName.Light0, LightParameter.Diffuse, light0_color);
+            GL.Light(LightName.Light0, LightParameter.Specular, light0_color);
+            //GL.Light(LightName.Light0, LightParameter.SpotCutoff, 45.0f);
+            //GL.Light(LightName.Light0, LightParameter.SpotDirection, light0_direction);
+
+            GL.Enable(EnableCap.Light1);
+            GL.Light(LightName.Light1, LightParameter.Ambient, light1_ambient);
+            GL.Light(LightName.Light1, LightParameter.Diffuse, light1_color);
+            GL.Light(LightName.Light1, LightParameter.Specular, light1_color);
+            GL.Light(LightName.Light1, LightParameter.SpotCutoff, 45.0f);
+
+            GL.Enable(EnableCap.Light2);
+            GL.Light(LightName.Light2, LightParameter.Ambient, light0_ambient);
+            GL.Light(LightName.Light2, LightParameter.Diffuse, light0_color);
+            GL.Light(LightName.Light2, LightParameter.Specular, light0_color);
+        }
+
+        /// <summary>
+        /// Called when it is time to setup the next frame. Add you game logic here.
+        /// </summary>
+        /// <param name="e">Contains timing information for framerate independent logic.</param>
+        protected override void OnUpdateFrame(FrameEventArgs e)
+        {
+            base.OnUpdateFrame(e);
+
+            //if (Keyboard[Key.Escape])           
+            //   instructions = !instructions;
+            if (Keyboard[Key.R])
+            {
+                ufo_cf = new Matrix4(0.921061f, 0.07913148f, 0.381294f, 0f
+                    , 0.03887697f, 0.9555604f, -0.2922235f, 0f
+                    , -0.3874729f, 0.2839792f, 0.8770531f, 0f
+                    , -14.08688f, 21.13233f, 28.20965f, 1f);
+                spacestation_cf = new Matrix4(1f, 0f, -8.876182E-09f, 0f,
+                                    2.623091E-09f, 0.9553365f, 0.2955203f, 0f,
+                                    8.47974E-09f, -0.2955202f, 0.9553366f, 0f,
+                                    -11f, -7f, -2f, 1f);
+                Vector4 row0 = new Vector4(0.03160404f, 0.608945f, -0.7925827f, 0f);
+                Vector4 row1 = new Vector4(-0.9942653f, 0.1002108f, 0.03734639f, 0f);
+                Vector4 row2 = new Vector4(0.1021673f, 0.786857f, 0.6086198f, 0f);
+                Vector4 row3 = new Vector4(0f, 1.788139E-06f, -64.03124f, 1f);
+                camera_cf.Row0 = row0;
+                camera_cf.Row1 = row1;
+                camera_cf.Row2 = row2;
+                camera_cf.Row3 = row3;
+            }
+            if (Keyboard[Key.Tilde])
+            {
+                ufo_startcf = new Matrix4(1f, 0f, 0f, 0f,
+                0f, 0.994532f, -0.1044385f, 0f,
+                0f, 0.1044385f, 0.994532f, 0f,
+                -4f, 29.95664f, -1.812712f, 1f);
+
+                alpha_interpol = 0.0f;
+                is_animating = true;
+                timer1.Enabled = true;
+
+            }
+            if (Keyboard[Key.I])
+                ufo_cf = ufo_startcf;
+            if (Keyboard[Key.BracketLeft])
+                ufo_cf = ufo_finalcf;
+            if (Keyboard[Key.F1])
+                filltype = true;
+            if (Keyboard[Key.F2])
+                filltype = false;
+            if (Keyboard[Key.F3])
+                GL.Disable(EnableCap.Light0);
+            if (Keyboard[Key.F4])
+                GL.Enable(EnableCap.Light0);
+            if (Keyboard[Key.F5])
+            {
+                emissive = false;
+                GL.Disable(EnableCap.Light1);
+            }
+            if (Keyboard[Key.F6])
+            {
+                emissive = true;
+                GL.Enable(EnableCap.Light1);
+            }
+            if (Keyboard[Key.F7])
+            {
+                emissive = false;
+                GL.Disable(EnableCap.Light2);
+            }
+            if (Keyboard[Key.F8])
+            {
+                emissive = true;
+                GL.Enable(EnableCap.Light2);
+            }
+            if (Keyboard[Key.F9])
+                ufo_spin = false;
+            if (Keyboard[Key.F10])
+                ufo_spin = true;
+            light0_pos = new float[4] { 20.0f, 5.0f, 50.0f, 1.0f };
+
+
+            ufoMovement(e);
+            spaceStationMovement(e);
+            cameraMovement(e);
+        }
+
+        /// <summary>
+        /// Called when your window is resized. Set your viewport here. It is also
+        /// a good place to set up your projection matrix (which probably changes
+        /// along when the aspect ratio of your window).
+        /// </summary>
+        /// <param name="e">Not used.</param>
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+
+            GL.Viewport(ClientRectangle.X, ClientRectangle.Y, ClientRectangle.Width, ClientRectangle.Height);
+
+            Matrix4 projection = Matrix4.CreatePerspectiveFieldOfView((float)Math.PI / 2, Width / (float)Height, 1.0f, 64.0f);
+            GL.MatrixMode(MatrixMode.Projection);
+            GL.LoadMatrix(ref projection);
+            GL.MatrixMode(MatrixMode.Modelview);
+
+
+            GL.LoadMatrix(ref camera_cf);
+        }
+
+
+        /// <summary>
+        /// Called when it is time to render the next frame. Add your rendering code here.
+        /// </summary>
+        /// <param name="e">Contains timing information.</param>
+        protected override void OnRenderFrame(FrameEventArgs e)
+        {
+            base.OnRenderFrame(e);
+            spinSpaceStation();
+            GL.Clear(ClearBufferMask.DepthBufferBit);
+            GL.Clear(ClearBufferMask.ColorBufferBit);
+            GL.Clear(ClearBufferMask.AccumBufferBit);
+            GL.Clear(ClearBufferMask.StencilBufferBit);
+
+            //based on the bool value toggled by 'Q' on the keyboard
+            if (filltype)
+                GL.PolygonMode(MaterialFace.Front, PolygonMode.Line);
+            else
+                GL.PolygonMode(MaterialFace.Front, PolygonMode.Fill);
+
+            GL.LoadMatrix(ref camera_cf);
+
+            GL.Light(LightName.Light2, LightParameter.Position, light0_pos);
+
+            GL.PushMatrix();
+            GL.Translate(light0_pos[0], light0_pos[1], light0_pos[2]);
+            GL.PushAttrib(AttribMask.LightingBit);
+            GL.Material(MaterialFace.FrontAndBack, MaterialParameter.Emission, light0_diffuse);
+            Glu.Sphere(sphere, 2, 40, 40);
+            GL.PopAttrib();
+            GL.PopMatrix();
+
+            OpenTK.Graphics.OpenGL.GL.EnableClientState(OpenTK.Graphics.OpenGL.ArrayCap.VertexArray);
+            OpenTK.Graphics.OpenGL.GL.EnableClientState(OpenTK.Graphics.OpenGL.ArrayCap.NormalArray);
+
+            GL.PushMatrix();
+            GL.MultMatrix(ref spacestation_cf);
+            renderSpaceStation();
+            GL.PopMatrix();
+
+            GL.PushMatrix();
+
+            GL.MultMatrix(ref ufo_cf);
+
+            render_ufo();
+            OpenTK.Graphics.OpenGL.GL.DisableClientState(OpenTK.Graphics.OpenGL.ArrayCap.VertexArray);
+            OpenTK.Graphics.OpenGL.GL.DisableClientState(OpenTK.Graphics.OpenGL.ArrayCap.NormalArray);
+            GL.PopMatrix();
+
+
+            //GL.Color3(1.0, 1.0, 1.0);
+            ////X AXIS
+            //GL.Begin(BeginMode.Lines);
+            //GL.Vertex3(-200.0f, 0f, 0f);
+            //GL.Vertex3(200.0f, 0f, 0f);
+            //GL.End();
+            //GL.PopMatrix();
+
+            ////Y AXIS
+            //GL.PushMatrix();
+            //GL.Begin(BeginMode.Lines);
+            //GL.Vertex3(0.0f, -200.0f, 0f);
+            //GL.Vertex3(0.0f, 200.0f, 0f);
+            //GL.End();
+            //GL.PopMatrix();
+
+            ////Z AXIS
+            //GL.PushMatrix();
+            //GL.Begin(BeginMode.Lines);
+            //GL.Vertex3(0.0f, 0f, -200.0f);
+            //GL.Vertex3(0.0f, 0f, 200.0f);
+            //GL.End();
+            //GL.PopMatrix();
+
+            SwapBuffers();
+        }
+        private void timerHandler()
+        {
+            if (alpha_interpol < 1.0f)
+            {
+                is_animating = true;
+                //matrix setup
+                timercount++;
+
+                Vector4 ufo_t1 = ufo_startcf.Row3;
+                Vector4 ufo_t2 = ufo_finalcf.Row3;
+                Quaternion ufo_q1 = new Quaternion();
+                Quaternion ufo_q2 = new Quaternion();
+
+                CreateFromMatrix(ref ufo_startcf, ref ufo_q1);
+                CreateFromMatrix(ref ufo_finalcf, ref ufo_q2);
+                Quaternion q_alpha;
+                Matrix4 ufo_m_alpha;
+                q_alpha = Quaternion.Slerp(ufo_q1, ufo_q2, alpha_interpol);
+                ufo_m_alpha = Matrix4.Rotate(q_alpha);
+
+                Vector4 translationp1 = Vector4.Mult(ufo_t1, (1 - alpha_interpol));
+                Vector4 translationp2 = Vector4.Mult(ufo_t2, alpha_interpol);
+                Vector4 translation = Vector4.Add(translationp1, translationp2);
+                ufo_m_alpha.Row3 = translation;
+                alpha_interpol += 0.02f;
+                ufo_cf = ufo_m_alpha;
+                timer1.Enabled = true;
+            }
+            else
+            {
+                is_animating = false;
+                timer1.Enabled = false;
+            }
+        }
+        private void OnTimedEvent(object source, ElapsedEventArgs e)
+        {
+            timerHandler();
+
+
+        }
+        public static void CreateFromMatrix(ref Matrix4 m, ref Quaternion q)
+        {
+            float trace = 1 + m.M11 + m.M22 + m.M33;
+            float S = 0;
+            float X = 0;
+            float Y = 0;
+            float Z = 0;
+            float W = 0;
+
+            if (trace > 0.0000001)
+            {
+                S = (float)Math.Sqrt(trace) * 2;
+                X = (m.M23 - m.M32) / S;
+                Y = (m.M31 - m.M13) / S;
+                Z = (m.M12 - m.M21) / S;
+                W = 0.25f * S;
+            }
+            else
+            {
+                if (m.M11 > m.M22 && m.M11 > m.M33)
+                {
+                    // Column 0: 
+                    S = (float)Math.Sqrt(1.0 + m.M11 - m.M22 - m.M33) * 2;
+                    X = 0.25f * S;
+                    Y = (m.M12 + m.M21) / S;
+                    Z = (m.M31 + m.M13) / S;
+                    W = (m.M23 - m.M32) / S;
+                }
+                else if (m.M22 > m.M33)
+                {
+                    // Column 1: 
+                    S = (float)Math.Sqrt(1.0 + m.M22 - m.M11 - m.M33) * 2;
+                    X = (m.M12 + m.M21) / S;
+                    Y = 0.25f * S;
+                    Z = (m.M23 + m.M32) / S;
+                    W = (m.M31 - m.M13) / S;
+                }
+                else
+                {
+                    // Column 2:
+                    S = (float)Math.Sqrt(1.0 + m.M33 - m.M11 - m.M22) * 2;
+                    X = (m.M31 + m.M13) / S;
+                    Y = (m.M23 + m.M32) / S;
+                    Z = 0.25f * S;
+                    W = (m.M12 - m.M21) / S;
+                }
+            }
+            q = new Quaternion(X, Y, Z, W);
+        }
+        public static Matrix4 CreateFromQuaternion(ref Quaternion q)
+        {
+            Matrix4 result = Matrix4.Identity;
+
+            float X = q.X;
+            float Y = q.Y;
+            float Z = q.Z;
+            float W = q.W;
+
+            float xx = X * X;
+            float xy = X * Y;
+            float xz = X * Z;
+            float xw = X * W;
+            float yy = Y * Y;
+            float yz = Y * Z;
+            float yw = Y * W;
+            float zz = Z * Z;
+            float zw = Z * W;
+
+            result.M11 = 1 - 2 * (yy + zz);
+            result.M21 = 2 * (xy - zw);
+            result.M31 = 2 * (xz + yw);
+            result.M12 = 2 * (xy + zw);
+            result.M22 = 1 - 2 * (xx + zz);
+            result.M32 = 2 * (yz - xw);
+            result.M13 = 2 * (xz - yw);
+            result.M23 = 2 * (yz + xw);
+            result.M33 = 1 - 2 * (xx + yy);
+            return result;
+        }
+        #endregion
+
+        #region Rendering
+
+        /// <summary>
+        /// Renders the Space Station to the screen
+        /// </summary>
+        private void renderSpaceStation()
+        {
+            GL.PushAttrib(AttribMask.LightingBit);
+            GL.Material(MaterialFace.Front, MaterialParameter.Ambient, chrome_ambi);
+            GL.Material(MaterialFace.Front, MaterialParameter.Diffuse, chrome_diff);
+            GL.Material(MaterialFace.Front, MaterialParameter.Specular, chrome_spec);
+            GL.Material(MaterialFace.Front, MaterialParameter.Shininess, 76.8000003f);
+            Glu.Cylinder(cylinder, 1.5, 1.5, 15, 20, 20);
+            Glu.Sphere(sphere, 3, 20, 20);
+            GL.Translate(0.0f, 0.0f, 15.0f);
+
+            GL.Rotate(spin, Vector3.UnitZ);
+
+            DrawTorus(1.2f, 8.0f, 128, 256);
+            GL.Rotate(90.0f, Vector3.UnitY);
+            Glu.Cylinder(cylinder, 0.7, 0.7, 8, 20, 20);
+
+            GL.Rotate(-180.0f, Vector3.UnitY);
+            Glu.Cylinder(cylinder, 0.7, 0.7, 8, 20, 20);
+            GL.Rotate(90.0f, Vector3.UnitX);
+            Glu.Cylinder(cylinder, 0.7, 0.7, 8, 20, 20);
+            GL.Rotate(-180.0f, Vector3.UnitX);
+            Glu.Cylinder(cylinder, 0.7, 0.7, 8, 20, 20);
+
+
+            GL.Rotate(90.0f, Vector3.UnitX);
+            GL.Rotate(90.0f, Vector3.UnitY);
+            GL.Rotate(-spin, Vector3.UnitZ);
+            Glu.Cylinder(cylinder, 1.5, 1.5, 3, 20, 20);
+            GL.Translate(0.0f, 0.0f, 3.0f);
+
+            GL.Begin(BeginMode.TriangleFan);
+            GL.Vertex3(0.0f, 0.0f, 0.0f);
+            for (float t = (float)(2 * Math.PI); t >= -.5; t -= .01f)
+            {
+                GL.Normal3(0.0, 0.0, -1.0);
+                GL.Vertex3(4 * Math.Cos(t), 4 * Math.Sin(t), 0.0f);
+            }
+            GL.End();
+
+            Glu.Cylinder(cylinder, 4, 4, 1.5, 20, 20);
+            GL.Translate(0.0f, 0.0f, 1.5f);
+
+            GL.Begin(BeginMode.TriangleFan);
+            GL.Vertex3(0.0f, 0.0f, 0.0f);
+            for (float t = (float)(2 * Math.PI); t >= -.5; t -= .01f)
+            {
+                GL.Normal3(0.0, 0.0, 1.0);
+                GL.Vertex3(4 * Math.Cos(t), 4 * Math.Sin(t), 0.0f);
+            }
+            GL.End();
+
+            Glu.Cylinder(cylinder, 1.5, 1.0, 1.5, 20, 20);
+            GL.Translate(0.0, 0.0, 1.5);
+
+            GL.Begin(BeginMode.TriangleFan);
+            GL.Vertex3(0.0f, 0.0f, 0.0f);
+            for (float t = (float)(2 * Math.PI); t >= -.5; t -= .01f)
+            {
+                GL.Normal3(0.0, 0.0, 1.0);
+                GL.Vertex3(1.0 * Math.Cos(t), 1.0 * Math.Sin(t), 0.0f);
+            }
+            GL.End();
+
+            GL.PopAttrib();
+        }
+
+        /// <summary>
+        /// Renders the UFO to the screen
+        /// </summary>
+        private void render_ufo()
+        {
+            //attribute set-up
+            if (ufo_spin)
+                GL.Rotate(spin, Vector3.UnitX);
+            //ufo bottom light
+            float[] light1_pos = new float[4] { 0.0f, 0.0f, 0.0f, 1.0f };
+            GL.Light(LightName.Light1, LightParameter.SpotDirection, light1_direction);
+            GL.Light(LightName.Light1, LightParameter.Position, light1_pos);
+            GL.PushAttrib(AttribMask.LightingBit);
+            if (emissive)
+                GL.Material(MaterialFace.FrontAndBack, MaterialParameter.Emission, light1_diffuse);
+            GL.Begin(BeginMode.TriangleFan);
+            GL.Vertex4(0.0f, 0.0f, 0.400000005960464f, 1.0f);
+            for (int i = 0; i < inner_light_array.Length; i++)
+            {
+                // [0] {(1.60000002384186, -3.91874022635249E-16, 0.400000005960464, 1)} OpenTK.Vector4d
+                GL.Normal3(0.0, 0.0, -1.0);
+                GL.Vertex4(inner_light_array[i].X, inner_light_array[i].Y, inner_light_array[i].Z, inner_light_array[i].W);
+            }
+            GL.Vertex4(inner_light_array[0].X, inner_light_array[0].Y, inner_light_array[0].Z, inner_light_array[0].W);
+            GL.End();
+            GL.PopAttrib();
+
+            GL.PushAttrib(AttribMask.LightingBit);
+            GL.Material(MaterialFace.Front, MaterialParameter.Ambient, obsidian_ambi);
+            GL.Material(MaterialFace.Front, MaterialParameter.Diffuse, obsidian_diff);
+            GL.Material(MaterialFace.Front, MaterialParameter.Specular, obsidian_spec);
+            GL.Material(MaterialFace.Front, MaterialParameter.Shininess, 38.400002f);
+
+
+
+            //inner_to_base, bot_middle_to_base, upper_mid_to_bot_mid, mid_to_uppermid, lower_green_tomid, 
+
+            //upper_green_tolowergreen, last_to_uppergreen;
+
+            GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
+
+            GL.VertexPointer(4, VertexPointerType.Double, 0, inner_to_base);
+            GL.NormalPointer(NormalPointerType.Double, 0, normal_inner_to_base);
+            GL.DrawArrays(BeginMode.Quads, 0, inner_to_base.Length);
+
+            //GL.BindBuffer(BufferTarget.ArrayBuffer, botbuffer2);
+            GL.NormalPointer(NormalPointerType.Double, 0, normal_bot_middle_to_base);
+            GL.VertexPointer(4, VertexPointerType.Double, 0, bot_middle_to_base);
+            GL.DrawArrays(BeginMode.Quads, 0, bot_middle_to_base.Length);
+
+            //GL.BindBuffer(BufferTarget.ArrayBuffer, botbuffer3);
+            GL.VertexPointer(4, VertexPointerType.Double, 0, upper_mid_to_bot_mid);
+            GL.NormalPointer(NormalPointerType.Double, 0, normal_upper_mid_to_bot_mid);
+            GL.DrawArrays(BeginMode.Quads, 0, upper_mid_to_bot_mid.Length);
+
+            //GL.BindBuffer(BufferTarget.ArrayBuffer, botbuffer4);
+            GL.VertexPointer(4, VertexPointerType.Double, 0, mid_to_uppermid);
+            GL.NormalPointer(NormalPointerType.Double, 0, normal_mid_to_uppermid);
+            GL.DrawArrays(BeginMode.Quads, 0, mid_to_uppermid.Length);
+
+            //GL.BindBuffer(BufferTarget.ArrayBuffer, botbuffer5);
+            GL.VertexPointer(4, VertexPointerType.Double, 0, lower_green_tomid);
+            GL.NormalPointer(NormalPointerType.Double, 0, normal_lower_green_to_mid);
+            GL.DrawArrays(BeginMode.Quads, 0, lower_green_tomid.Length);
+            GL.PopAttrib();
+            GL.PushAttrib(AttribMask.LightingBit);
+            GL.Material(MaterialFace.Front, MaterialParameter.Ambient, emerald_ambi);
+            GL.Material(MaterialFace.Front, MaterialParameter.Diffuse, emerald_diff);
+            GL.Material(MaterialFace.Front, MaterialParameter.Specular, emerald_spec);
+            GL.Material(MaterialFace.Front, MaterialParameter.Shininess, 76.8000003f);
+
+            //GL.BindBuffer(BufferTarget.ArrayBuffer, botbuffer6);
+            GL.VertexPointer(4, VertexPointerType.Double, 0, upper_green_tolowergreen);
+            GL.NormalPointer(NormalPointerType.Double, 0, normal_upper_green_tolowergreen);
+            GL.DrawArrays(BeginMode.Quads, 0, upper_green_tolowergreen.Length);
+            GL.PopAttrib();
+            GL.PushAttrib(AttribMask.LightingBit);
+            GL.Material(MaterialFace.Front, MaterialParameter.Ambient, obsidian_ambi);
+            GL.Material(MaterialFace.Front, MaterialParameter.Diffuse, obsidian_diff);
+            GL.Material(MaterialFace.Front, MaterialParameter.Specular, obsidian_spec);
+            GL.Material(MaterialFace.Front, MaterialParameter.Shininess, 38.400002f);
+            //GL.BindBuffer(BufferTarget.ArrayBuffer, botbuffer7);
+            GL.VertexPointer(4, VertexPointerType.Double, 0, last_to_uppergreen);
+            GL.NormalPointer(NormalPointerType.Double, 0, normal_last_to_uppergreen);
+            GL.DrawArrays(BeginMode.Quads, 0, last_to_uppergreen.Length);
+
+            //GL.BindBuffer(BufferTarget.ArrayBuffer, oneto2buffer);
+            GL.VertexPointer(4, VertexPointerType.Double, 0, oneto2);
+            GL.NormalPointer(NormalPointerType.Double, 0, normal_oneto2);
+            GL.DrawArrays(BeginMode.Quads, 0, oneto2.Length);
+
+            //GL.BindBuffer(BufferTarget.ArrayBuffer, twoto3buffer);
+            GL.VertexPointer(4, VertexPointerType.Double, 0, twoto3);
+            GL.NormalPointer(NormalPointerType.Double, 0, normal_twoto3);
+            GL.DrawArrays(BeginMode.Quads, 0, twoto3.Length);
+
+            //GL.BindBuffer(BufferTarget.ArrayBuffer, threeto4buffer);
+            GL.VertexPointer(4, VertexPointerType.Double, 0, threeto4);
+            GL.NormalPointer(NormalPointerType.Double, 0, normal_threeto4);
+            GL.DrawArrays(BeginMode.Quads, 0, threeto4.Length);
+
+            //GL.BindBuffer(BufferTarget.ArrayBuffer, fourto5buffer);
+            GL.VertexPointer(4, VertexPointerType.Double, 0, fourto5);
+            GL.NormalPointer(NormalPointerType.Double, 0, normal_fourto5);
+            GL.DrawArrays(BeginMode.Quads, 0, fourto5.Length);
+
+            //GL.BindBuffer(BufferTarget.ArrayBuffer, fiveto6buffer);
+            GL.VertexPointer(4, VertexPointerType.Double, 0, fiveto6);
+            GL.NormalPointer(NormalPointerType.Double, 0, normal_fiveto6);
+            GL.DrawArrays(BeginMode.Quads, 0, fiveto6.Length);
+
+            //GL.BindBuffer(BufferTarget.ArrayBuffer, sixto7buffer);
+            GL.VertexPointer(4, VertexPointerType.Double, 0, sixto7);
+            GL.NormalPointer(NormalPointerType.Double, 0, normal_sixto7);
+            GL.DrawArrays(BeginMode.Quads, 0, sixto7.Length);
+
+            //GL.BindBuffer(BufferTarget.ArrayBuffer, sevento8buffer);
+            GL.VertexPointer(4, VertexPointerType.Double, 0, sevento8);
+            GL.NormalPointer(NormalPointerType.Double, 0, normal_sevento8);
+            GL.DrawArrays(BeginMode.Quads, 0, sevento8.Length);
+
+            //GL.BindBuffer(BufferTarget.ArrayBuffer, eightto9buffer);
+            GL.VertexPointer(4, VertexPointerType.Double, 0, eighto9);
+            GL.NormalPointer(NormalPointerType.Double, 0, normal_eighto9);
+            GL.DrawArrays(BeginMode.Quads, 0, eighto9.Length);
+
+            //GL.BindBuffer(BufferTarget.ArrayBuffer, nineto10buffer);
+            GL.VertexPointer(4, VertexPointerType.Double, 0, nineto10);
+            GL.NormalPointer(NormalPointerType.Double, 0, normal_nineto10);
+            GL.DrawArrays(BeginMode.Quads, 0, nineto10.Length);
+            GL.PolygonMode(MaterialFace.Front, PolygonMode.Fill);
+
+            GL.Begin(BeginMode.Polygon);
+            for (int i = 0; i < dome1_array.Length; i++)
+            {
+                GL.Normal3(0.0, 0.0, 1.0);
+                GL.Vertex4(dome1_array[i].X, dome1_array[i].Y, dome1_array[i].Z, dome1_array[i].W);
+            }
+            GL.End();
+
+            GL.PopAttrib();
+        }
+
+        /// <summary>
+        /// Drawing the Torus for the space station
+        /// </summary>
+        /// <param name="tubeRadius"></param>
+        /// <param name="radius"></param>
+        /// <param name="sides"></param>
+        /// <param name="rings"></param>
+        public static void DrawTorus(float tubeRadius, float radius, int sides, int rings)
+        {
+            Vector3d vNormal = new Vector3d();
+            float ringDelta, sideDelta, cosPhi, sinPhi, dist;
+            float theta, phi, theta1, cosTheta, sinTheta, cosTheta1, sinTheta1;
+
+            theta = 0;
+            cosTheta = 1.0f;
+            sinTheta = 0.0f;
+            sideDelta = (float)(2.0f * Math.PI / sides);
+            ringDelta = (float)(2.0f * Math.PI / rings);
+
+            for (int i = rings - 1; i >= 0; i--)
+            {
+                phi = 0;
+                theta1 = theta + ringDelta;
+                cosTheta1 = (float)Math.Cos(theta1);
+                sinTheta1 = (float)Math.Sin(theta1);
+
+                GL.Begin(BeginMode.QuadStrip);
+                for (int j = sides; j >= 0; j--)
+                {
+                    phi = phi + sideDelta;
+                    cosPhi = (float)Math.Cos(phi);
+                    sinPhi = (float)Math.Sin(phi);
+                    dist = radius + (tubeRadius * cosPhi);
+                    GL.Normal3(cosTheta1 * cosPhi, -sinTheta1 * cosPhi, sinPhi);
+                    GL.Vertex3(cosTheta1 * dist, -sinTheta1 * dist, tubeRadius * sinPhi);
+
+                    GL.Normal3(cosTheta * cosPhi, -sinTheta * cosPhi, sinPhi);
+                    GL.Vertex3(cosTheta * dist, -sinTheta * dist, tubeRadius * sinPhi);
+                }
+                GL.End();
+
+                theta = theta1;
+                cosTheta = cosTheta1;
+                sinTheta = sinTheta1;
+            }
+        }
+
+        #endregion
+
+        #region Main
+
+        /// <summary>
+        /// The main entry point for the application.
+        /// </summary>
+        [STAThread]
+        static void Main()
+        {
+            // The 'using' idiom guarantees proper resource cleanup.
+            // We request 30 UpdateFrame events per second, and unlimited
+            // RenderFrame events (as fast as the computer can handle).
+            using (Game game = new Game())
+            {
+                game.Run(30.0);
+            }
+        }
+
+        #endregion
+    }
+}
